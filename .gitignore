@@ -1,0 +1,22 @@
+# Cargo output is reproducible; Cargo.lock remains a reviewed source input.
+/target/
+
+# Exclude local environment secrets without hiding documented examples.
+.env
+.env.*
+!.env.example
+
+# Personal editor state and platform metadata are not SDK source inputs.
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Per-machine Cargo overrides and credential material must not affect releases.
+/.cargo/config.local.toml
+/credentials.toml
+*.p12
+*.p8
+*.pem
+*.key

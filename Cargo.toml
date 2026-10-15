@@ -1,0 +1,34 @@
+[package]
+name = "omni-plugin-sdk"
+version = "1.0.0"
+description = "Exact-version, statically linked native plugin contracts for Omni Bar"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository = "https://github.com/nilo-ggyt/omni-plugin-sdk"
+readme = "README.md"
+publish = false
+
+[workspace]
+members = ["."]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+incompatible_msrv = "deny"
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = "=2.0.20"

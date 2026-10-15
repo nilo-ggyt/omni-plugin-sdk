@@ -1,0 +1,47 @@
+name: SDK contracts
+
+on:
+  push:
+  pull_request:
+
+# Source checkout is the only repository permission required by portable SDK checks.
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Rust 1.98 / ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux verifies that protocol contracts have no AppKit/Host dependency.
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          # A supported Apple Silicon image validates the product's explicit target.
+          - os: macos-26
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: 1.98.0
+      RUSTDOCFLAGS: -D warnings
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+    steps:
+      # Pin executable action code rather than following a mutable action branch/tag.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Install declared toolchain and target
+        run: rustup toolchain install 1.98.0 --profile minimal --component clippy --component rustfmt --target ${{ matrix.target }}
+      - name: Record compiler identity
+        run: rustc +1.98.0 --version --verbose
+      - name: Check formatting
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Check contracts and safety diagnostics
+        run: cargo +1.98.0 clippy --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+      - name: Run portable contract tests
+        run: cargo +1.98.0 test --workspace --target ${{ matrix.target }} --locked
+      - name: Run public documentation examples
+        run: cargo +1.98.0 test --workspace --doc --target ${{ matrix.target }} --locked
+      - name: Build documented API
+        run: cargo +1.98.0 doc --workspace --no-deps --target ${{ matrix.target }} --locked
