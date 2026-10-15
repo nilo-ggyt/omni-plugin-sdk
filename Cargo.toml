@@ -1,6 +1,6 @@
 [package]
 name = "omni-plugin-sdk"
-version = "2.0.0"
+version = "3.0.0"
 description = "Exact-version, statically linked native plugin contracts for Omni Bar"
 edition.workspace = true
 rust-version.workspace = true

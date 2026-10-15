@@ -23,18 +23,18 @@ pub enum PluginCloseIntent {
 /// [`Self::ApplicationTermination`] after committing an actual pending quit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginCloseScope {
-    /// Require complete native weak-graph release before any ordinary successor.
+    /// 普通后继必须等待项目资源收据和旧窗口实际释放。
     ///
-    /// All observed plugin nodes, including the closed native window, must be
-    /// deallocated. Canonical documents and every session-owned resource must also
-    /// be released; a detached empty window is insufficient for this scope.
+    /// 文档、历史、文件、映射、业务缓冲区和工作任务实际释放；构造账本中的项目对象默认
+    /// weak nil。只有具体类型逐字段验证已释放全部业务载荷/容量并撤销权限后，才允许框架
+    /// 持有惰性空壳。借用共享编辑器须验证公开数据和 callback/undo 关系已清除，不能按类名
+    /// 忽略存活对象。普通窗口本身必须实际析构；失去可见性或排队一轮不构成收据。
     ForegroundTransition,
-    /// End the process after payload release and a validated terminal window receipt.
+    /// 同样完成项目资源边界后，只允许推进 Host 已接受的应用退出。
     ///
-    /// Canonical/document/session payload, callbacks, files, mappings and native
-    /// content must be released. A closed, detached, empty native window may remain
-    /// leased solely by the OS until process exit. That receipt is explicitly not
-    /// native deallocation and cannot authorize a successor or continued residency.
+    /// 允许经验证已关闭、不可见/非 key、无 content/delegate/responder/项目 callback 或业务
+    /// 字段的框架 window lease 留到进程退出。它不是窗口 deallocation，不能授权后继或常驻
+    /// 隐藏会话。其他业务资源与共享编辑器义务同普通 scope，不因退出而省略。
     ApplicationTermination,
 }
 
@@ -66,7 +66,7 @@ pub enum PluginCloseScope {
 /// ```compile_fail
 /// use omni_plugin_sdk::{PluginCloseIntent, PluginCloseRequest};
 ///
-/// // Protocol 2 has no inferred/default release scope for an old intent-only call.
+/// // 当前协议不从 intent 推断 scope，旧调用不能靠默认转换继续工作。
 /// let request = PluginCloseRequest { intent: PluginCloseIntent::DismissAndResume };
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -106,13 +106,11 @@ pub trait PluginHostLifecycle {
 
     /// Notify the Host once after the accepted request's exact release boundary.
     ///
-    /// The native owner stops callbacks/access, invalidates mounted borrows and
-    /// releases canonical/session payload before completion. Foreground scope
-    /// requires actual complete weak-graph release. Terminal scope requires the
-    /// same payload release and a validated closed/detached/empty window receipt;
-    /// an OS-only window lease may remain until process exit and is not called
-    /// deallocation. The Host validates the exact accepted request, ignores stale
-    /// or duplicate completion, and consumes its barrier only once.
+    /// 原生所有者先撤销回调与 mounted borrow，再实际释放 canonical/session 资源。
+    /// 依照 [`PluginCloseScope`] 验证构造账本中的显式对象、逐类型空壳和借用缓存关系。
+    /// ForegroundTransition 还要求旧窗口实际释放；ApplicationTermination 可返回受检的
+    /// 空框架 window lease。SDK 标量 request 不是资源证明，不能代替消费者的原生收据。
+    /// Host 核对已接受 request 与交易身份，拒绝过期或重复完成，只消费一次 barrier。
     ///
     /// The Host releases its session after outstanding Rust borrows/callback
     /// frames have returned. Foreground completion may then create its ordinary
@@ -210,8 +208,9 @@ pub trait PluginSession {
     ///
     /// # Errors
     ///
-    /// The default returns `close_unsupported`. Implementations return a stable
-    /// failure while preserving unsaved data and the current usable surface.
+    /// 默认返回 `close_unsupported`。初次接受前的输入提交、保存或 admission 失败保留
+    /// 未保存数据与可编辑表面。接受后的冲突请求、非法提升或资源证明失败则保留已接受的
+    /// Closing 状态并阻止后继，不承诺恢复可编辑表面，也不能补发成功收据。
     fn request_close(&mut self, _request: PluginCloseRequest) -> Result<(), PluginError> {
         // An unsupported session refuses both scopes explicitly; it never invents release authority.
         Err(PluginError::new(

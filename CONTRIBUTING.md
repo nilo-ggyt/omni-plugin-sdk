@@ -22,15 +22,18 @@ Preserve current signatures and semantics unless a protocol change is explicitly
 authorized. Never repair incompatible consumers with a silent adapter. Host
 release assembly must resolve one SDK package identity.
 
-Protocol 2 uses `PluginCloseRequest { intent, scope }` at every session/lifecycle
-close call. Preserve the original intent and permit only Host-authorized
-foreground-to-termination promotion after actual pending quit. Ordinary close
-still requires full native graph release. A terminal-only closed/detached/empty
-OS-leased window receipt cannot retain plugin payload or authorize an ordinary
-successor, and must never be described as native deallocation. Review the
-[scope and completion contract](README.md#native-ownership-and-teardown) in both
-Host and plugin consumers. The SDK has no implementation that can enforce those
-native/state-machine predicates for them.
+Protocol 3 retains `PluginCloseRequest { intent, scope }` and the Host-authorized
+monotonic termination promotion. Protocol 2 required full native-graph deallocation
+for `ForegroundTransition`; `ApplicationTermination` already allowed a validated
+OS-only empty-window lease after releasing the non-window payload/content graph.
+Protocol 3 changes the common resource proof for both scopes: explicitly owned
+roles may satisfy a concrete audited inert-shell receipt, while borrowed framework
+caches require verified content and authority disconnection. This is a semantic
+break, not a new terminal-window exemption. Read the
+[resource contract](RESOURCE_CONTRACT.md) and the
+[scope contract](README.md#native-ownership-and-teardown). Update every consumer to one exact
+SDK identity and protocol; no adapter or parallel supported generation is provided. The SDK
+does not implement native proof for consumers.
 
 ## Rust and comment requirements
 
@@ -38,7 +41,7 @@ Use Rust 1.99.0, edition 2024, default rustfmt, and the committed lockfile. Work
 members explicitly inherit selected lint policy. No production nightly or blanket
 restriction-lint set is required.
 
-All project-owned documentation and comments are English. Document modules, types,
+新增或修改的源码、rustdoc、架构和生命周期注释按最新用户要求使用中文；公开集成文档继续提供英文。Document modules, types,
 traits, functions, methods, public fields, errors, and unsafe caller obligations.
 Inside functions, explain every logical stage and each conditional branch or
 meaningful match arm, including fallbacks and early errors. Explain the purpose,

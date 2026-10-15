@@ -274,9 +274,9 @@ fn unknown_command_is_rejected_before_handler_side_effects() {
 /// Neither an older nor a newer protocol may execute its handler.
 #[test]
 fn exact_protocol_rejection_precedes_command_validation_and_dispatch() {
-    // The package intentionally exposes one breaking contract rather than accepting protocol 1 alongside it.
-    assert_eq!(PLUGIN_PROTOCOL_VERSION, 2);
-    assert_eq!(env!("CARGO_PKG_VERSION"), "2.0.0");
+    // 资源成功条件改变时显式升版；协议 2 与未来版本均不得进入当前处理器。
+    assert_eq!(PLUGIN_PROTOCOL_VERSION, 3);
+    assert_eq!(env!("CARGO_PKG_VERSION"), "3.0.0");
     // Both directions exercise exact equality; each iteration starts with an untouched Host.
     for descriptor in [&OLDER_DESCRIPTOR, &NEWER_DESCRIPTOR] {
         let mut host = FakeHost::default();

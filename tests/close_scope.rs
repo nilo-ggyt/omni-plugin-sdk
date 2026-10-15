@@ -1,4 +1,4 @@
-//! Portable protocol-2 participant model: explicit authority, promotion and release receipt routing.
+//! 协议 3 的可移植权限模型：close scope、单调提升与收据路由；不模拟原生资源证明。
 //!
 //! The SDK supplies data/traits, not this state machine. These fake participants exercise an
 //! implementation of the documented obligations; booleans never prove real AppKit deallocation.
@@ -15,6 +15,10 @@ use omni_plugin_sdk::{
 #[derive(Clone, Copy, Default)]
 struct NativeFacts {
     payload_released: bool,
+    explicit_objects_alive: bool,
+    inert_payload_empty: bool,
+    inert_authority_revoked: bool,
+    borrowed_relations_cleared: bool,
     window_alive: bool,
     window_closed: bool,
     window_detached: bool,
@@ -28,6 +32,10 @@ impl NativeFacts {
         // Every terminal predicate is independent; later regressions remove one at a time.
         Self {
             payload_released: true,
+            explicit_objects_alive: false,
+            inert_payload_empty: false,
+            inert_authority_revoked: false,
+            borrowed_relations_cleared: true,
             window_alive: true,
             window_closed: true,
             window_detached: true,
@@ -36,11 +44,12 @@ impl NativeFacts {
         }
     }
 
-    /// Model the stricter ordinary observation: payload and the entire window graph are gone.
+    /// 所有显式角色已析构且借用关系已清；不对框架私有组合对象作销毁声明。
     fn all_released() -> Self {
         // With no live window, no terminal-only window predicate is needed or inferred.
         Self {
             payload_released: true,
+            borrowed_relations_cleared: true,
             ..Self::default()
         }
     }
@@ -114,15 +123,21 @@ impl PluginHostLifecycle for ContractHost {
             return;
         }
         let facts = self.native.get();
-        if self.payload.upgrade().is_some() || !facts.payload_released {
-            // Neither scope accepts a live canonical payload or any remaining native plugin payload.
+        let explicit_roles_complete = !facts.explicit_objects_alive
+            || (facts.inert_payload_empty && facts.inert_authority_revoked);
+        if self.payload.upgrade().is_some()
+            || !facts.payload_released
+            || !explicit_roles_complete
+            || !facts.borrowed_relations_cleared
+        {
+            // 两个 scope 都拒绝业务数据、未受检的活对象或未清除的借用权限；空字符串单项不足。
             self.ignored_completions
                 .set(self.ignored_completions.get() + 1);
             return;
         }
         let scope_complete = match request.scope {
             PluginCloseScope::ForegroundTransition => {
-                // An ordinary handoff requires actual complete native release, including the window.
+                // 普通交接除共同资源收据外，还要求旧窗口实际析构，不能借用 terminal 例外。
                 !facts.window_alive
             }
             PluginCloseScope::ApplicationTermination => {
@@ -325,7 +340,7 @@ fn accepted_scope_promotes_only_monotonically_without_changing_intent() {
 
 /// An empty OS-leased window is insufficient for ordinary handoff even after all payload is released.
 #[test]
-fn foreground_completion_requires_the_entire_native_graph_to_be_gone() {
+fn foreground_completion_requires_old_window_deallocation() {
     // Ordinary Launcher handoff cannot consume a receipt that would only be valid for process termination.
     let mut session = ContractSession::new();
     let foreground = request(
@@ -339,12 +354,55 @@ fn foreground_completion_requires_the_entire_native_graph_to_be_gone() {
     assert!(!session.host.completed.get());
     assert_eq!(session.host.launcher_successors.get(), 0);
 
-    // A separate full-release observation is required; changing the scope is not an ordinary fallback.
+    // 旧窗口的实际释放是独立条件，不能把切换 scope 当成普通交接的退路。
     session.host.native.set(NativeFacts::all_released());
     session.host.finish_close(foreground);
     assert!(session.host.completed.get());
     assert_eq!(session.host.launcher_successors.get(), 1);
     assert_eq!(session.host.terminal_completions.get(), 0);
+}
+
+/// 空壳业务数据、回调权限和共享编辑器关系逐项必要，窗口 nil 不能代替这些收据。
+#[test]
+fn foreground_requires_complete_owned_and_borrowed_receipts_with_an_inert_shell() {
+    let mut session = ContractSession::new();
+    let foreground = request(
+        PluginCloseIntent::ExitToLauncher,
+        PluginCloseScope::ForegroundTransition,
+    );
+    session.request_close(foreground).unwrap();
+    session.release_payload();
+    let valid = NativeFacts {
+        explicit_objects_alive: true,
+        inert_payload_empty: true,
+        inert_authority_revoked: true,
+        ..NativeFacts::all_released()
+    };
+    for invalid in [
+        NativeFacts {
+            inert_payload_empty: false,
+            ..valid
+        },
+        NativeFacts {
+            inert_authority_revoked: false,
+            ..valid
+        },
+        NativeFacts {
+            borrowed_relations_cleared: false,
+            ..valid
+        },
+    ] {
+        // 每次仅撤掉一个必要事实；保留原请求且不生成后继，不能用低内存或时间代替。
+        session.host.native.set(invalid);
+        session.host.finish_close(foreground);
+        assert!(!session.host.completed.get());
+        assert_eq!(session.host.launcher_successors.get(), 0);
+    }
+    // 这里只验证具备完整空壳收据时的路由规则，实际字段与原生对象由消费者另行验收。
+    session.host.native.set(valid);
+    session.host.finish_close(foreground);
+    assert!(session.host.completed.get());
+    assert_eq!(session.host.launcher_successors.get(), 1);
 }
 
 /// Every terminal receipt predicate matters, and no receipt may retain actual canonical payload.
@@ -367,6 +425,22 @@ fn terminal_completion_requires_released_payload_and_a_valid_window_receipt() {
     for invalid in [
         NativeFacts {
             payload_released: false,
+            ..valid
+        },
+        NativeFacts {
+            explicit_objects_alive: true,
+            inert_payload_empty: false,
+            inert_authority_revoked: true,
+            ..valid
+        },
+        NativeFacts {
+            explicit_objects_alive: true,
+            inert_payload_empty: true,
+            inert_authority_revoked: false,
+            ..valid
+        },
+        NativeFacts {
+            borrowed_relations_cleared: false,
             ..valid
         },
         NativeFacts {
@@ -397,6 +471,42 @@ fn terminal_completion_requires_released_payload_and_a_valid_window_receipt() {
     session.host.native.set(valid);
     session.host.finish_close(terminal);
     assert!(session.host.completed.get());
+    assert_eq!(session.host.terminal_completions.get(), 1);
+    assert_eq!(session.host.launcher_successors.get(), 0);
+}
+
+/// terminal 可消费完整的惰性空壳与借用关系收据，但绝不能按原 intent 创建 Launcher。
+#[test]
+fn terminal_completion_accepts_audited_inert_roles_without_an_ordinary_successor() {
+    // Host 先授予真实 pending quit；显式的 Launcher intent 使错误后继路由可被观察。
+    let mut session = ContractSession::new();
+    session.host.pending_quit.set(true);
+    let terminal = request(
+        PluginCloseIntent::ExitToLauncher,
+        PluginCloseScope::ApplicationTermination,
+    );
+    session.request_close(terminal).unwrap();
+
+    // 真实 Rust payload 必须先结束所有权；其弱引用 nil 独立于模型中的空壳事实。
+    session.release_payload();
+    assert!(session.host.payload.upgrade().is_none());
+    session.host.native.set(NativeFacts {
+        explicit_objects_alive: true,
+        inert_payload_empty: true,
+        inert_authority_revoked: true,
+        ..NativeFacts::terminal_window()
+    });
+
+    // 模型只验证已具备全部收据时的权限路由，不用 bool 声称实际 AppKit 对象已清空。
+    session.host.finish_close(terminal);
+    assert_eq!(session.host.accepted.get(), Some(terminal));
+    assert!(session.host.completed.get());
+    assert_eq!(session.host.terminal_completions.get(), 1);
+    assert_eq!(session.host.launcher_successors.get(), 0);
+
+    // 重复回执不能消费第二次终止权限，也不能恢复被抑制的普通后继。
+    session.host.finish_close(terminal);
+    assert_eq!(session.host.ignored_completions.get(), 1);
     assert_eq!(session.host.terminal_completions.get(), 1);
     assert_eq!(session.host.launcher_successors.get(), 0);
 }

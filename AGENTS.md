@@ -13,11 +13,8 @@ source. Preserve unrelated edits; user instructions take precedence.
 - Allocate no plugin resources in dormant catalog metadata. The concrete active
   session owns resources; explicit save/close handles failures; the Host releases
   session ownership after its native teardown barrier.
-- Use detailed English responsibility/contract docs and local explanations for
-  every logical section, conditional branch, match arm, loop/closure/callback,
-  failure exit, and resource transition. One function header is insufficient.
-  Each unsafe block/implementation has a precise adjacent English `SAFETY`
-  justification, and unsafe APIs expose caller obligations.
+- 按最新用户 AGENTS，新增/修改的源码注释、rustdoc、架构与生命周期说明使用简洁准确中文；标识符、错误码、协议字段与标准 `SAFETY` / `# Safety` 标记保留。公开集成文档仍提供英文。
+- 逐一解释逻辑阶段、条件分支、match、循环、回调、失败出口和资源转换；长函数不能只写一条概要。注释解释约束、不变量与后果，不机械翻译语法；不批量改写第三方或既有注释。
 - Main-thread native ownership is not made safe by `Rc` or TLS alone. Never add
   unsafe `Send`/`Sync` to opaque native handles or fabricate an `NSView` in a pure
   test. Portable contract tests do not prove native release or performance.

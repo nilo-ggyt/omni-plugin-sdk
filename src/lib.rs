@@ -8,7 +8,7 @@
 //! calls in one application, not a stable dynamic-library or C ABI.
 //!
 //! Private modules separate contract responsibilities while the root re-exports
-//! expose the single protocol-2 consumer API, including explicit close scope.
+//! 对外仍只有协议 3 的单一 API；close scope 携带明确的项目资源释放约束。
 
 #![deny(rustdoc::broken_intra_doc_links)]
 

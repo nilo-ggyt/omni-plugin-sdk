@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-/// The only protocol version accepted by this SDK and its assembled application.
-pub const PLUGIN_PROTOCOL_VERSION: u16 = 2;
+/// 唯一接受的资源与生命周期协议；3 明确区分项目对象、受检空壳和框架借用缓存。
+pub const PLUGIN_PROTOCOL_VERSION: u16 = 3;
 
 /// One discoverable command declared in a static plugin descriptor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

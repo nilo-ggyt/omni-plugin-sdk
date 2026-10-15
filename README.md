@@ -3,7 +3,7 @@
 The shared Rust contract for Omni Bar and its statically linked native plugins.
 This repository owns the protocol, borrowed invocation inputs, Host capabilities,
 foreground-session interfaces, and stable error codes. The SDK package is
-`omni-plugin-sdk` **2.0.0** and its exact `PLUGIN_PROTOCOL_VERSION` is **2**.
+`omni-plugin-sdk` **3.0.0** and its exact `PLUGIN_PROTOCOL_VERSION` is **3**.
 
 Omni Bar links approved plugins into the same macOS application and DMG. There is
 no runtime installer, dynamic-library ABI, plugin daemon, filesystem discovery,
@@ -29,7 +29,7 @@ reviewed full commit from this repository; it is a placeholder, not a release re
 ```toml
 # Keep this exact source/revision identical in Host and every bundled plugin.
 [workspace.dependencies]
-omni-plugin-sdk = { git = "https://github.com/nilo-ggyt/omni-plugin-sdk.git", rev = "SDK_COMMIT", version = "=2.0.0" }
+omni-plugin-sdk = { git = "https://github.com/nilo-ggyt/omni-plugin-sdk.git", rev = "SDK_COMMIT", version = "=3.0.0" }
 ```
 
 Member crates inherit that dependency with `omni-plugin-sdk.workspace = true`.
@@ -113,12 +113,12 @@ its borrowed handle before the native object becomes unavailable.
 A concrete plugin session owns its native/document resource graph. Save or flush
 before requesting close; a failure preserves the usable surface and unsaved data.
 After successful preparation, commit one explicit `PluginCloseRequest`, stop new
-work and request native close. Every protocol-2 close entry carries both fields:
+work and request native close. Every protocol-3 close entry carries both fields:
 
 ```rust
 use omni_plugin_sdk::{PluginCloseIntent, PluginCloseRequest, PluginCloseScope};
 
-// Ordinary dismissal explicitly requires full native graph release.
+// Declare the ordinary project-resource boundary and actual old-window release.
 let request = PluginCloseRequest {
     intent: PluginCloseIntent::DismissAndResume,
     scope: PluginCloseScope::ForegroundTransition,
@@ -127,15 +127,15 @@ let request = PluginCloseRequest {
 
 `PluginSession::request_close(request)`, `PluginHostLifecycle::begin_close(request)`
 and `PluginHostLifecycle::finish_close(request)` use this same request type.
-Protocol 2 intentionally breaks the old intent-only signatures. There is no
-implicit scope, default conversion, compatibility adapter or simultaneous
-protocol-1 implementation. The default session method explicitly refuses either
+Protocol 3 changes the successful resource receipt from protocol 2 while retaining these
+explicit request fields. The previous full-graph-nil meaning is not silently reused. There is
+no implicit scope, default conversion, compatibility adapter or parallel protocol generation. The default session method explicitly refuses either
 scope with `close_unsupported`; it does not claim lifecycle support or release.
 
 | Close scope | Required release observation | Permitted completion |
 | --- | --- | --- |
-| `ForegroundTransition` | Actual full native weak graph is nil, including the closed window; canonical/session resources are released and borrowed mounts invalidated. | The original ordinary successor, once, after session release. |
-| `ApplicationTermination` | Canonical/document/history/file/mapping/session payload and native content are released, plugin callbacks stopped, mounts invalidated; either the whole native graph is nil or the sole survivor is a validated closed, detached, empty window held only by the OS. | Advance an already pending application quit, once; no successor or continued residency. |
+| `ForegroundTransition` | Canonical/session resources, buffers, files, mappings and tasks are released; explicitly owned roles pass actual deallocation or a concrete audited inert-shell receipt; borrowed framework editors are empty and disconnected; mounts invalidated and the old window actually deallocated. | The original ordinary successor, once, after session release. |
+| `ApplicationTermination` | The same project-resource, inert-shell and borrowed-editor proofs pass; a validated closed, detached, empty framework window lease may remain until actual process exit. | Advance an already pending application quit, once; no successor or continued residency. |
 
 The Host alone authorizes terminal scope after committing **actual pending quit**.
 A plugin cannot select it because a close is slow, a window is invisible, an OS
@@ -143,10 +143,13 @@ reference remains, or a callback/timeout occurs. The window receipt requires
 independent validation of closed, detached, empty and OS-only ownership facts;
 the SDK's scalar request is no such proof. A permitted OS window lease lasts at
 most until process exit and is explicitly **not deallocation**. It may retain no
-canonical document, history, mapping, file, plugin-owned content/control graph,
-callback owner or hidden reusable session. A surviving content graph fails both
-scopes. No sleep, polling loop, force-exit or assumed queue turn supplies release
-evidence.
+canonical document, history, mapping, file, business buffer, live callback authority or
+hidden reusable session. A concrete inert shell must have relinquished every project
+payload field and allocation; weak document links or an empty visible string alone are
+insufficient. Borrowed framework caches require public content/undo/delegate disconnection
+and independent bounded-repeat evidence. Class-name waivers are forbidden. See the precise
+[resource contract](RESOURCE_CONTRACT.md). No sleep, polling loop, force-exit or assumed queue
+turn supplies release evidence.
 
 An accepted request's `intent` is immutable. Identical repeats are idempotent and
 do not save or close again. If actual quit overtakes an accepted ordinary close,
