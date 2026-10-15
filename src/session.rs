@@ -15,11 +15,74 @@ pub enum PluginCloseIntent {
     ExitToLauncher,
 }
 
-/// Host-owned callbacks for one main-thread foreground transition.
+/// The Host-authorized release boundary for an otherwise unchanged close intent.
+///
+/// This is an explicit protocol distinction, not a timing workaround. A plugin
+/// cannot infer application termination from a native close callback, invisibility,
+/// a timeout, or the presence of an OS-owned reference. The Host alone authorizes
+/// [`Self::ApplicationTermination`] after committing an actual pending quit.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginCloseScope {
+    /// Require complete native weak-graph release before any ordinary successor.
+    ///
+    /// All observed plugin nodes, including the closed native window, must be
+    /// deallocated. Canonical documents and every session-owned resource must also
+    /// be released; a detached empty window is insufficient for this scope.
+    ForegroundTransition,
+    /// End the process after payload release and a validated terminal window receipt.
+    ///
+    /// Canonical/document/session payload, callbacks, files, mappings and native
+    /// content must be released. A closed, detached, empty native window may remain
+    /// leased solely by the OS until process exit. That receipt is explicitly not
+    /// native deallocation and cannot authorize a successor or continued residency.
+    ApplicationTermination,
+}
+
+/// One explicit close intent and its Host-authorized release scope.
+///
+/// Save/flush succeeds before the initial request is accepted. Repeated requests
+/// preserve `intent`; the only permitted scope change is
+/// [`PluginCloseScope::ForegroundTransition`] to
+/// [`PluginCloseScope::ApplicationTermination`] after actual pending quit. The
+/// plugin asks [`PluginHostLifecycle::begin_close`] to validate that promotion
+/// before replacing its accepted copy. Rejection preserves the previous request.
+/// A terminal request cannot be downgraded or reused for an ordinary successor.
+///
+/// The SDK carries this contract but does not implement or verify a Host state
+/// machine. Both participants validate the same accepted request and once-only
+/// completion; public fields do not themselves confer termination authority.
+///
+/// ```
+/// use omni_plugin_sdk::{PluginCloseIntent, PluginCloseRequest, PluginCloseScope};
+///
+/// // An ordinary dismissal declares both independent pieces of lifecycle policy.
+/// let request = PluginCloseRequest {
+///     intent: PluginCloseIntent::DismissAndResume,
+///     scope: PluginCloseScope::ForegroundTransition,
+/// };
+/// assert_eq!(request.scope, PluginCloseScope::ForegroundTransition);
+/// ```
+///
+/// ```compile_fail
+/// use omni_plugin_sdk::{PluginCloseIntent, PluginCloseRequest};
+///
+/// // Protocol 2 has no inferred/default release scope for an old intent-only call.
+/// let request = PluginCloseRequest { intent: PluginCloseIntent::DismissAndResume };
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PluginCloseRequest {
+    /// The original dismissal/resume or Launcher successor intent, unchanged during quit.
+    pub intent: PluginCloseIntent,
+    /// The explicit release contract authorized by the Host's current transaction.
+    pub scope: PluginCloseScope,
+}
+
+/// Host-owned callbacks for one main-thread foreground or termination transaction.
 ///
 /// Implementations own the state machine: the SDK does not schedule callbacks or
 /// infer native destruction. A native close request, `windowWillClose:`, the
 /// project's once-only teardown barrier, and actual deallocation are distinct.
+/// Termination has its own explicit receipt and never weakens ordinary teardown.
 pub trait PluginHostLifecycle {
     /// Commit a successfully prepared surface before it becomes user-visible.
     ///
@@ -28,20 +91,35 @@ pub trait PluginHostLifecycle {
     /// Reject conflicting creation state; the caller retains cleanup ownership.
     fn commit_creation(&self) -> Result<(), PluginError>;
 
-    /// Commit one close intent after fallible save/flush work succeeds.
+    /// Validate and commit an initial request, identical repeat, or allowed promotion.
+    ///
+    /// Initial close follows successful fallible save/flush. An accepted request's
+    /// intent never changes. A repeated identical request is idempotent; the sole
+    /// scope promotion is foreground to termination after the Host has committed
+    /// actual pending quit. No timeout or native reference can authorize promotion.
     ///
     /// # Errors
     ///
-    /// Reject conflicting transitions without discarding the active session.
-    fn begin_close(&self, intent: PluginCloseIntent) -> Result<(), PluginError>;
+    /// Reject a conflicting intent, downgrade, unauthorized terminal scope, or
+    /// stale transaction without replacing the prior accepted request/resources.
+    fn begin_close(&self, request: PluginCloseRequest) -> Result<(), PluginError>;
 
-    /// Notify the host after the native callback stack and resource-release barrier.
+    /// Notify the Host once after the accepted request's exact release boundary.
     ///
-    /// The native owner must stop callbacks/access before releasing its graph.
-    /// The host invalidates borrowed view state, consumes the barrier once, and
-    /// drops its session before creating any successor. Implementations must
-    /// supply bounded, non-panicking cleanup without native save/error dialogs.
-    fn finish_close(&self, intent: PluginCloseIntent);
+    /// The native owner stops callbacks/access, invalidates mounted borrows and
+    /// releases canonical/session payload before completion. Foreground scope
+    /// requires actual complete weak-graph release. Terminal scope requires the
+    /// same payload release and a validated closed/detached/empty window receipt;
+    /// an OS-only window lease may remain until process exit and is not called
+    /// deallocation. The Host validates the exact accepted request, ignores stale
+    /// or duplicate completion, and consumes its barrier only once.
+    ///
+    /// The Host releases its session after outstanding Rust borrows/callback
+    /// frames have returned. Foreground completion may then create its ordinary
+    /// successor; terminal completion may only advance the already pending quit.
+    /// Neither receipt can be silently reclassified as the other scope. Cleanup
+    /// remains bounded/non-panicking and presents no save/error dialogs here.
+    fn finish_close(&self, request: PluginCloseRequest);
 }
 
 /// A non-owning, main-thread-only opaque handle to a plugin-owned AppKit `NSView`.
@@ -100,8 +178,11 @@ impl PluginNativeView {
 ///
 /// A concrete session owns its active resource graph and performs bounded cleanup
 /// when dropped. Fallible save/flush work belongs in explicit close operations,
-/// not in `Drop`. Native destruction and host borrowing still require integration
-/// validation; implementing this trait does not enforce a lifecycle automatically.
+/// not in `Drop`. Canonical documents, histories, file descriptors, mappings, callbacks
+/// and other plugin payload end with this owner. An explicitly validated terminal
+/// OS window lease cannot retain that payload or become a hidden resident session.
+/// Native destruction and Host borrowing still require integration validation;
+/// implementing this trait does not enforce a lifecycle automatically.
 pub trait PluginSession {
     /// Return the current borrowed native view, or `None` for a viewless session.
     fn native_view(&self) -> Option<PluginNativeView> {
@@ -109,14 +190,30 @@ pub trait PluginSession {
         None
     }
 
-    /// Request save/close using the host's selected lifecycle intent.
+    /// Request save/close using the Host's explicit intent and release scope.
+    ///
+    /// Save/flush failure preserves the active surface and unsaved data before
+    /// calling `begin_close`. After acceptance, identical repeats do not save or
+    /// close twice; an authorized scope promotion preserves the original intent
+    /// and first asks the lifecycle owner to validate the promoted request.
+    /// Native close itself is not completion; finish with the exact accepted
+    /// request only after its scope-specific release boundary is satisfied.
+    ///
+    /// ```compile_fail
+    /// use omni_plugin_sdk::{PluginCloseIntent, PluginSession};
+    ///
+    /// // An old protocol intent cannot silently acquire an ordinary or terminal scope.
+    /// fn close_old(session: &mut dyn PluginSession) {
+    ///     let _ = session.request_close(PluginCloseIntent::DismissAndResume);
+    /// }
+    /// ```
     ///
     /// # Errors
     ///
     /// The default returns `close_unsupported`. Implementations return a stable
     /// failure while preserving unsaved data and the current usable surface.
-    fn request_close(&mut self, _intent: PluginCloseIntent) -> Result<(), PluginError> {
-        // Preserve the original refusal contract until a concrete session owns close handling.
+    fn request_close(&mut self, _request: PluginCloseRequest) -> Result<(), PluginError> {
+        // An unsupported session refuses both scopes explicitly; it never invents release authority.
         Err(PluginError::new(
             "close_unsupported",
             "插件 session 不支持关闭请求",

@@ -3,7 +3,7 @@
 use std::path::Path;
 
 /// The only protocol version accepted by this SDK and its assembled application.
-pub const PLUGIN_PROTOCOL_VERSION: u16 = 1;
+pub const PLUGIN_PROTOCOL_VERSION: u16 = 2;
 
 /// One discoverable command declared in a static plugin descriptor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

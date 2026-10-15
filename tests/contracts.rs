@@ -6,9 +6,9 @@ use std::rc::Rc;
 
 use omni_plugin_sdk::{
     ModifierFlags, OmniBarHostContext, PLUGIN_PROTOCOL_VERSION, PluginActivation,
-    PluginActivationHandler, PluginCloseIntent, PluginCommandDescriptor, PluginCommandTarget,
-    PluginDescriptor, PluginError, PluginHostLifecycle, PluginInvocation, PluginNativeView,
-    PluginRegistration, PluginSession,
+    PluginActivationHandler, PluginCloseIntent, PluginCloseRequest, PluginCloseScope,
+    PluginCommandDescriptor, PluginCommandTarget, PluginDescriptor, PluginError,
+    PluginHostLifecycle, PluginInvocation, PluginNativeView, PluginRegistration, PluginSession,
 };
 
 /// Real multi-command metadata prevents a single-command fixture masking lookup errors.
@@ -52,7 +52,7 @@ const NEWER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
 #[derive(Default)]
 struct FakeLifecycle {
     events: RefCell<Vec<&'static str>>,
-    close_intent: Cell<Option<PluginCloseIntent>>,
+    close_request: Cell<Option<PluginCloseRequest>>,
 }
 
 impl PluginHostLifecycle for FakeLifecycle {
@@ -63,18 +63,18 @@ impl PluginHostLifecycle for FakeLifecycle {
         Ok(())
     }
 
-    /// Record the user's chosen successor while the fake session still exists.
-    fn begin_close(&self, intent: PluginCloseIntent) -> Result<(), PluginError> {
-        // Keep the intent explicit so tests distinguish dismissal from return to Launcher.
-        self.close_intent.set(Some(intent));
+    /// Record both explicit lifecycle fields while the fake session still exists.
+    fn begin_close(&self, request: PluginCloseRequest) -> Result<(), PluginError> {
+        // These ordinary wiring tests forward the request; guarded policy cases have a separate model.
+        self.close_request.set(Some(request));
         self.events.borrow_mut().push("closing");
         Ok(())
     }
 
     /// Model the Host's notification after an independently observed teardown barrier.
-    fn finish_close(&self, intent: PluginCloseIntent) {
+    fn finish_close(&self, request: PluginCloseRequest) {
         // This is a synthetic test event; real AppKit barrier/release tests belong to Host.
-        self.close_intent.set(Some(intent));
+        self.close_request.set(Some(request));
         self.events.borrow_mut().push("finished");
     }
 }
@@ -144,10 +144,10 @@ struct OwnedSession {
 }
 
 impl PluginSession for OwnedSession {
-    /// Forward the explicit close intent while retaining ownership until Host release.
-    fn request_close(&mut self, intent: PluginCloseIntent) -> Result<(), PluginError> {
+    /// Forward the explicit close request while retaining ownership until Host release.
+    fn request_close(&mut self, request: PluginCloseRequest) -> Result<(), PluginError> {
         // A close request is not Drop: the Host still owns this session after the callback.
-        self.lifecycle.begin_close(intent)
+        self.lifecycle.begin_close(request)
     }
 }
 
@@ -274,6 +274,9 @@ fn unknown_command_is_rejected_before_handler_side_effects() {
 /// Neither an older nor a newer protocol may execute its handler.
 #[test]
 fn exact_protocol_rejection_precedes_command_validation_and_dispatch() {
+    // The package intentionally exposes one breaking contract rather than accepting protocol 1 alongside it.
+    assert_eq!(PLUGIN_PROTOCOL_VERSION, 2);
+    assert_eq!(env!("CARGO_PKG_VERSION"), "2.0.0");
     // Both directions exercise exact equality; each iteration starts with an untouched Host.
     for descriptor in [&OLDER_DESCRIPTOR, &NEWER_DESCRIPTOR] {
         let mut host = FakeHost::default();
@@ -319,6 +322,11 @@ fn session_transfer_and_both_close_intents_preserve_owner_release_order() {
         PluginCloseIntent::DismissAndResume,
         PluginCloseIntent::ExitToLauncher,
     ] {
+        // Both ordinary successors require the same complete native release scope.
+        let request = PluginCloseRequest {
+            intent,
+            scope: PluginCloseScope::ForegroundTransition,
+        };
         let mut host = FakeHost::default();
         let registration = PluginRegistration::new(&DESCRIPTOR, open_session);
         let activation = registration
@@ -336,13 +344,13 @@ fn session_transfer_and_both_close_intents_preserve_owner_release_order() {
         assert_eq!(Rc::strong_count(&host.lifecycle), 2);
         assert!(session.native_view().is_none());
         session
-            .request_close(intent)
+            .request_close(request)
             .expect("close intent accepted");
-        assert_eq!(host.lifecycle.close_intent.get(), Some(intent));
+        assert_eq!(host.lifecycle.close_request.get(), Some(request));
         assert_eq!(Rc::strong_count(&host.lifecycle), 2);
 
         // The fake Host signals a synthetic barrier before dropping its sole session Box.
-        host.lifecycle.finish_close(intent);
+        host.lifecycle.finish_close(request);
         assert_eq!(
             &*host.lifecycle.events.borrow(),
             &["created", "closing", "finished"]
@@ -358,11 +366,20 @@ fn default_session_remains_viewless_and_refuses_unimplemented_close() {
     // A default session must not manufacture a view or silently pretend a close succeeded.
     let mut session = ViewlessSession;
     assert!(session.native_view().is_none());
-    let error = session
-        .request_close(PluginCloseIntent::DismissAndResume)
-        .expect_err("default close is unsupported");
-    assert_eq!(error.code(), "close_unsupported");
-    assert_eq!(error.to_string(), "插件 session 不支持关闭请求");
+    for scope in [
+        PluginCloseScope::ForegroundTransition,
+        PluginCloseScope::ApplicationTermination,
+    ] {
+        // Explicit refusal applies equally to both scopes; neither invents unsupported completion.
+        let error = session
+            .request_close(PluginCloseRequest {
+                intent: PluginCloseIntent::DismissAndResume,
+                scope,
+            })
+            .expect_err("default close is unsupported");
+        assert_eq!(error.code(), "close_unsupported");
+        assert_eq!(error.to_string(), "插件 session 不支持关闭请求");
+    }
 }
 
 /// The invocation retains caller-owned text/path borrows rather than copying their content.

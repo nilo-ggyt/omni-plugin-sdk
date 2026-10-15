@@ -22,6 +22,16 @@ Preserve current signatures and semantics unless a protocol change is explicitly
 authorized. Never repair incompatible consumers with a silent adapter. Host
 release assembly must resolve one SDK package identity.
 
+Protocol 2 uses `PluginCloseRequest { intent, scope }` at every session/lifecycle
+close call. Preserve the original intent and permit only Host-authorized
+foreground-to-termination promotion after actual pending quit. Ordinary close
+still requires full native graph release. A terminal-only closed/detached/empty
+OS-leased window receipt cannot retain plugin payload or authorize an ordinary
+successor, and must never be described as native deallocation. Review the
+[scope and completion contract](README.md#native-ownership-and-teardown) in both
+Host and plugin consumers. The SDK has no implementation that can enforce those
+native/state-machine predicates for them.
+
 ## Rust and comment requirements
 
 Use Rust 1.99.0, edition 2024, default rustfmt, and the committed lockfile. Workspace

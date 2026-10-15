@@ -8,7 +8,7 @@
 //! calls in one application, not a stable dynamic-library or C ABI.
 //!
 //! Private modules separate contract responsibilities while the root re-exports
-//! preserve the original consumer-facing API.
+//! expose the single protocol-2 consumer API, including explicit close scope.
 
 #![deny(rustdoc::broken_intra_doc_links)]
 
@@ -26,5 +26,6 @@ pub use protocol::{
 };
 pub use registration::{PluginActivationHandler, PluginCommandTarget, PluginRegistration};
 pub use session::{
-    PluginActivation, PluginCloseIntent, PluginHostLifecycle, PluginNativeView, PluginSession,
+    PluginActivation, PluginCloseIntent, PluginCloseRequest, PluginCloseScope, PluginHostLifecycle,
+    PluginNativeView, PluginSession,
 };
