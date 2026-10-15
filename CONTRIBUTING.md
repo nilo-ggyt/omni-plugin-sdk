@@ -24,7 +24,7 @@ release assembly must resolve one SDK package identity.
 
 ## Rust and comment requirements
 
-Use Rust 1.98.0, edition 2024, default rustfmt, and the committed lockfile. Workspace
+Use Rust 1.99.0, edition 2024, default rustfmt, and the committed lockfile. Workspace
 members explicitly inherit selected lint policy. No production nightly or blanket
 restriction-lint set is required.
 

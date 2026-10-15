@@ -29,7 +29,7 @@ reviewed full commit from this repository; it is a placeholder, not a release re
 ```toml
 # Keep this exact source/revision identical in Host and every bundled plugin.
 [workspace.dependencies]
-omni-plugin-sdk = { git = "https://github.com/nilo-ggyt/omni-plugin-sdk", rev = "SDK_COMMIT", version = "=1.0.0" }
+omni-plugin-sdk = { git = "https://github.com/nilo-ggyt/omni-plugin-sdk.git", rev = "SDK_COMMIT", version = "=1.0.0" }
 ```
 
 Member crates inherit that dependency with `omni-plugin-sdk.workspace = true`.
@@ -40,32 +40,36 @@ This task does not publish the SDK to crates.io (`publish = false`).
 
 ## Build and verify
 
-Rust **1.98.0**, edition **2024**, is pinned in `rust-toolchain.toml`. The SDK itself
+Rust **1.99.0**, edition **2024**, is pinned in `rust-toolchain.toml`. The SDK itself
 contains no AppKit dependency, so its contract tests can run on Linux or macOS.
 Actual native plugin surfaces target Apple Silicon macOS, with macOS **14.0** as
 the deployment floor. Building for that floor is not macOS 14 runtime evidence.
+
+The 1.99.0 pin avoids the [trait-object vtable miscompilation in Rust 1.98.0](https://blog.rust-lang.org/2026/09/03/Rust-1.98.1/),
+fixed in 1.98.1. This matters to session and lifecycle trait objects even though the protocol does
+not need newly stabilized language syntax. See the [1.99.0 release](https://blog.rust-lang.org/2026/10/01/Rust-1.99.0/).
 
 Run these commands from a clean checkout:
 
 ```sh
 # Check source layout and the selected compiler/safety diagnostics.
-cargo +1.98.0 fmt --all -- --check
-cargo +1.98.0 clippy --workspace --all-targets --locked -- -D warnings
+cargo +1.99.0 fmt --all -- --check
+cargo +1.99.0 clippy --workspace --all-targets --locked -- -D warnings
 
 # Verify public contracts and rustdoc examples against the committed dependency graph.
-cargo +1.98.0 test --workspace --locked
-cargo +1.98.0 test --workspace --doc --locked
-cargo +1.98.0 doc --workspace --no-deps --locked
+cargo +1.99.0 test --workspace --locked
+cargo +1.99.0 test --workspace --doc --locked
+cargo +1.99.0 doc --workspace --no-deps --locked
 ```
 
 On a macOS development machine, also validate the product target:
 
 ```sh
 # Build the same architecture consumed by the statically linked application.
-MACOSX_DEPLOYMENT_TARGET=14.0 cargo +1.98.0 build --release --target aarch64-apple-darwin --locked
+MACOSX_DEPLOYMENT_TARGET=14.0 cargo +1.99.0 build --release --target aarch64-apple-darwin --locked
 ```
 
-The [CI workflow](.github/workflows/ci.yml) uses Rust 1.98.0 on `ubuntu-24.04` and
+The [CI workflow](.github/workflows/ci.yml) uses Rust 1.99.0 on `ubuntu-24.04` and
 `macos-26`, with the macOS target explicitly set to `aarch64-apple-darwin`.
 These labels were checked against GitHub's [supported hosted runner list](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 on 2026-10-15. The workflow definition is not evidence that a remote run occurred.

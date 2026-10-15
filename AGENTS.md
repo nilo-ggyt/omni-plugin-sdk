@@ -6,7 +6,7 @@ source. Preserve unrelated edits; user instructions take precedence.
 - This independent repository owns the shared static Rust protocol only. Do not
   depend on Host or concrete plugin implementations. Keep existing root API
   exports stable and implementation modules private.
-- Use Rust 1.98.0/edition 2024, exact protocol equality, synchronous registration,
+- Use Rust 1.99.0/edition 2024, exact protocol equality, synchronous registration,
   and one SDK Cargo source identity across a Host assembly. Source extraction does
   not authorize runtime loading, installers, IPC, processes, negotiation, or
   compatibility layers.

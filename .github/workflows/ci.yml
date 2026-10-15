@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   contracts:
-    name: Rust 1.98 / ${{ matrix.target }}
+    name: Rust 1.99 / ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +23,7 @@ jobs:
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     env:
-      RUSTUP_TOOLCHAIN: 1.98.0
+      RUSTUP_TOOLCHAIN: 1.99.0
       RUSTDOCFLAGS: -D warnings
       MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
@@ -32,16 +32,16 @@ jobs:
         with:
           persist-credentials: false
       - name: Install declared toolchain and target
-        run: rustup toolchain install 1.98.0 --profile minimal --component clippy --component rustfmt --target ${{ matrix.target }}
+        run: rustup toolchain install 1.99.0 --profile minimal --component clippy --component rustfmt --target ${{ matrix.target }}
       - name: Record compiler identity
-        run: rustc +1.98.0 --version --verbose
+        run: rustc +1.99.0 --version --verbose
       - name: Check formatting
-        run: cargo +1.98.0 fmt --all -- --check
+        run: cargo +1.99.0 fmt --all -- --check
       - name: Check contracts and safety diagnostics
-        run: cargo +1.98.0 clippy --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+        run: cargo +1.99.0 clippy --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
       - name: Run portable contract tests
-        run: cargo +1.98.0 test --workspace --target ${{ matrix.target }} --locked
+        run: cargo +1.99.0 test --workspace --target ${{ matrix.target }} --locked
       - name: Run public documentation examples
-        run: cargo +1.98.0 test --workspace --doc --target ${{ matrix.target }} --locked
+        run: cargo +1.99.0 test --workspace --doc --target ${{ matrix.target }} --locked
       - name: Build documented API
-        run: cargo +1.98.0 doc --workspace --no-deps --target ${{ matrix.target }} --locked
+        run: cargo +1.99.0 doc --workspace --no-deps --target ${{ matrix.target }} --locked
