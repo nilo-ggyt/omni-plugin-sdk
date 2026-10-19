@@ -2,7 +2,9 @@
 
 use std::path::Path;
 
-/// 唯一接受的资源与生命周期协议；3 明确区分项目对象、受检空壳和框架借用缓存。
+/// The exact resource/lifecycle protocol accepted by Host and plugins.
+/// Protocol 3 distinguishes owned objects, explicitly audited inert shells, and
+/// borrowed framework caches; matching this value alone proves no actual release.
 pub const PLUGIN_PROTOCOL_VERSION: u16 = 3;
 
 /// One discoverable command declared in a static plugin descriptor.

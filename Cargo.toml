@@ -6,7 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository = "https://github.com/nilo-ggyt/omni-plugin-sdk"
-readme = "README.md"
+# Public API guidance lives in rustdoc; no standalone README is a required package input.
+readme = false
 publish = false
 
 [workspace]

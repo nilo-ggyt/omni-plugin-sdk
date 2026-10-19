@@ -7,8 +7,9 @@
 //! [`PLUGIN_PROTOCOL_VERSION`]. Registration and activation are ordinary Rust
 //! calls in one application, not a stable dynamic-library or C ABI.
 //!
-//! Private modules separate contract responsibilities while the root re-exports
-//! 对外仍只有协议 3 的单一 API；close scope 携带明确的项目资源释放约束。
+//! Private modules separate contract responsibilities; root re-exports expose
+//! one protocol-3 API. Close scope states the required project-resource release
+//! boundary without creating a second lifecycle implementation inside the SDK.
 
 #![deny(rustdoc::broken_intra_doc_links)]
 

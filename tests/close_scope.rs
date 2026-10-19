@@ -1,4 +1,4 @@
-//! 协议 3 的可移植权限模型：close scope、单调提升与收据路由；不模拟原生资源证明。
+//! Portable protocol-3 authority model: close scope, monotonic promotion, and receipt routing.
 //!
 //! The SDK supplies data/traits, not this state machine. These fake participants exercise an
 //! implementation of the documented obligations; booleans never prove real AppKit deallocation.
@@ -44,7 +44,7 @@ impl NativeFacts {
         }
     }
 
-    /// 所有显式角色已析构且借用关系已清；不对框架私有组合对象作销毁声明。
+    /// Model released explicit roles and cleared borrows without claiming private framework destruction.
     fn all_released() -> Self {
         // With no live window, no terminal-only window predicate is needed or inferred.
         Self {
@@ -130,14 +130,14 @@ impl PluginHostLifecycle for ContractHost {
             || !explicit_roles_complete
             || !facts.borrowed_relations_cleared
         {
-            // 两个 scope 都拒绝业务数据、未受检的活对象或未清除的借用权限；空字符串单项不足。
+            // Both scopes reject retained payload, unaudited live objects, or uncleared borrows; empty text alone is insufficient.
             self.ignored_completions
                 .set(self.ignored_completions.get() + 1);
             return;
         }
         let scope_complete = match request.scope {
             PluginCloseScope::ForegroundTransition => {
-                // 普通交接除共同资源收据外，还要求旧窗口实际析构，不能借用 terminal 例外。
+                // Ordinary handoff also requires old-window deallocation; the terminal exception cannot authorize a successor.
                 !facts.window_alive
             }
             PluginCloseScope::ApplicationTermination => {
@@ -354,7 +354,7 @@ fn foreground_completion_requires_old_window_deallocation() {
     assert!(!session.host.completed.get());
     assert_eq!(session.host.launcher_successors.get(), 0);
 
-    // 旧窗口的实际释放是独立条件，不能把切换 scope 当成普通交接的退路。
+    // Old-window release is an independent obligation; changing scope cannot rescue an ordinary handoff.
     session.host.native.set(NativeFacts::all_released());
     session.host.finish_close(foreground);
     assert!(session.host.completed.get());
@@ -362,7 +362,7 @@ fn foreground_completion_requires_old_window_deallocation() {
     assert_eq!(session.host.terminal_completions.get(), 0);
 }
 
-/// 空壳业务数据、回调权限和共享编辑器关系逐项必要，窗口 nil 不能代替这些收据。
+/// Inert payload, revoked authority, and shared-editor cleanup each matter independently of a nil window.
 #[test]
 fn foreground_requires_complete_owned_and_borrowed_receipts_with_an_inert_shell() {
     let mut session = ContractSession::new();
@@ -392,13 +392,13 @@ fn foreground_requires_complete_owned_and_borrowed_receipts_with_an_inert_shell(
             ..valid
         },
     ] {
-        // 每次仅撤掉一个必要事实；保留原请求且不生成后继，不能用低内存或时间代替。
+        // Remove one required fact at a time; the accepted request stays pending without substituting memory or timing evidence.
         session.host.native.set(invalid);
         session.host.finish_close(foreground);
         assert!(!session.host.completed.get());
         assert_eq!(session.host.launcher_successors.get(), 0);
     }
-    // 这里只验证具备完整空壳收据时的路由规则，实际字段与原生对象由消费者另行验收。
+    // This model checks routing with complete inert-shell receipts; consumers separately verify actual fields and native objects.
     session.host.native.set(valid);
     session.host.finish_close(foreground);
     assert!(session.host.completed.get());
@@ -475,10 +475,10 @@ fn terminal_completion_requires_released_payload_and_a_valid_window_receipt() {
     assert_eq!(session.host.launcher_successors.get(), 0);
 }
 
-/// terminal 可消费完整的惰性空壳与借用关系收据，但绝不能按原 intent 创建 Launcher。
+/// Terminal scope may consume audited inert-shell/borrow receipts but cannot create the remembered Launcher successor.
 #[test]
 fn terminal_completion_accepts_audited_inert_roles_without_an_ordinary_successor() {
-    // Host 先授予真实 pending quit；显式的 Launcher intent 使错误后继路由可被观察。
+    // The Host participant grants pending-quit authority; explicit Launcher intent exposes incorrect successor routing.
     let mut session = ContractSession::new();
     session.host.pending_quit.set(true);
     let terminal = request(
@@ -487,7 +487,7 @@ fn terminal_completion_accepts_audited_inert_roles_without_an_ordinary_successor
     );
     session.request_close(terminal).unwrap();
 
-    // 真实 Rust payload 必须先结束所有权；其弱引用 nil 独立于模型中的空壳事实。
+    // The actual Rust payload must lose its owner; its nil Weak probe is independent of modeled native-shell facts.
     session.release_payload();
     assert!(session.host.payload.upgrade().is_none());
     session.host.native.set(NativeFacts {
@@ -497,14 +497,14 @@ fn terminal_completion_accepts_audited_inert_roles_without_an_ordinary_successor
         ..NativeFacts::terminal_window()
     });
 
-    // 模型只验证已具备全部收据时的权限路由，不用 bool 声称实际 AppKit 对象已清空。
+    // Complete modeled receipts permit authority routing; these booleans do not prove actual AppKit cleanup.
     session.host.finish_close(terminal);
     assert_eq!(session.host.accepted.get(), Some(terminal));
     assert!(session.host.completed.get());
     assert_eq!(session.host.terminal_completions.get(), 1);
     assert_eq!(session.host.launcher_successors.get(), 0);
 
-    // 重复回执不能消费第二次终止权限，也不能恢复被抑制的普通后继。
+    // A repeated receipt cannot consume termination authority twice or revive a suppressed ordinary successor.
     session.host.finish_close(terminal);
     assert_eq!(session.host.ignored_completions.get(), 1);
     assert_eq!(session.host.terminal_completions.get(), 1);

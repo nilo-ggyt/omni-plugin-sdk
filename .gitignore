@@ -1,22 +1,64 @@
 # Cargo output is reproducible; Cargo.lock remains a reviewed source input.
-/target/
+target/
+**/*.rs.bk
 
 # Exclude local environment secrets without hiding documented examples.
 .env
 .env.*
 !.env.example
+.secrets/
 
 # Personal editor state and platform metadata are not SDK source inputs.
 .DS_Store
+.AppleDouble/
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
 # Per-machine Cargo overrides and credential material must not affect releases.
 /.cargo/config.local.toml
 /credentials.toml
+**/.cargo/credentials
+**/.cargo/credentials.toml
+.cargo-ok
 *.p12
+*.pfx
 *.p8
 *.pem
 *.key
+*.mobileprovision
+id_rsa
+id_ecdsa
+id_ed25519
+id_dsa
+
+# Native bundles, profiling output, and script caches are reproducible local artifacts.
+*.app/
+*.dmg
+*.dSYM/
+*.trace/
+*.crash
+*.log
+*.profraw
+*.profdata
+*.memgraph
+*.heap
+*.sample
+*.spindump
+__pycache__/
+*.py[cod]
+
+# AI rules, session traces, and machine-specific tool settings are not SDK build inputs.
+/.agents/
+/.codex/
+/.trellis/
+/AGENTS.md
+/CLAUDE.md
+/.cursor/
+/.windsurf/
+/.claude/
+
+# Keep reviewed environment samples visible after the broader profiling-output pattern.
+!.env.sample
