@@ -5,6 +5,8 @@ use std::path::Path;
 /// The exact resource/lifecycle protocol accepted by Host and plugins.
 /// Protocol 3 distinguishes owned objects, explicitly audited inert shells, and
 /// borrowed framework caches; matching this value alone proves no actual release.
+/// A version mismatch is rejected before activation; there is no negotiated or
+/// legacy close contract behind this value.
 pub const PLUGIN_PROTOCOL_VERSION: u16 = 3;
 
 /// One discoverable command declared in a static plugin descriptor.
@@ -40,9 +42,11 @@ pub struct PluginDescriptor {
 
 impl PluginDescriptor {
     /// Find a declared command by exact identity, without normalizing or allocating.
+    /// Search normalization belongs to the host's result list; activation must
+    /// still name a command declared by this particular plugin.
     #[must_use]
     pub fn command(self, command_id: &str) -> Option<PluginCommandDescriptor> {
-        // Borrow static entries and stop at the matching command; absence stays explicit.
+        // Borrow static entries and stop at the matching command; absence grants no dispatch authority.
         self.commands.iter().copied().find(|command| {
             // Match command identity rather than UI titles or activation-code heuristics.
             command.id == command_id
@@ -81,6 +85,9 @@ pub struct ModifierFlags {
 ///
 /// A returned session must not retain references to these inputs. A plugin that
 /// actually needs an input after activation must make that ownership explicit.
+/// Supplying a selected path or text is not an instruction to scan directories
+/// or monitor the clipboard. Later use requires an explicitly owned copy for
+/// that plugin operation, not a retained borrow of the caller's invocation.
 #[derive(Clone, Copy, Debug)]
 pub struct PluginInvocation<'a> {
     /// Exact identity of the command selected from the plugin descriptor.

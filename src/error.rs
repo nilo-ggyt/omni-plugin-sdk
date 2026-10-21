@@ -7,14 +7,16 @@ use thiserror::Error;
 /// Static strings prevent this boundary from accidentally retaining document
 /// bodies, paths, or an arbitrary native error graph. Display exposes the supplied
 /// message, while callers use [`Self::code`] for programmatic handling.
+/// The SDK propagates a boundary error rather than logging it; the final Host or
+/// plugin owner presents a Chinese user message and records the failure once.
 ///
 /// ```
 /// use omni_plugin_sdk::PluginError;
 ///
 /// // Keep a stable code independent from the human-facing explanation.
-/// let error = PluginError::new("save_failed", "The document could not be saved");
+/// let error = PluginError::new("save_failed", "文档保存失败");
 /// assert_eq!(error.code(), "save_failed");
-/// assert_eq!(error.to_string(), "The document could not be saved");
+/// assert_eq!(error.to_string(), "文档保存失败");
 /// ```
 #[derive(Debug, Error, Eq, PartialEq)]
 #[error("{message}")]

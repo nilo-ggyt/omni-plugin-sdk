@@ -18,6 +18,9 @@ pub trait OmniBarHostContext {
     fn workspace_root(&self) -> &Path;
 
     /// Borrow the application-owned root for explicitly activated session data.
+    ///
+    /// The Host owns root selection. Receiving this path creates no directories
+    /// and does not permit a plugin to substitute a test root for normal user data.
     fn application_data_root(&self) -> &Path;
 
     /// Mount a borrowed native view without taking its native ownership.
@@ -26,6 +29,8 @@ pub trait OmniBarHostContext {
     ///
     /// Return a stable failure if the host cannot accept the view. The plugin
     /// must preserve the view's owner until mounting and any failure cleanup end.
+    /// The pointer is not a native retain; the Host must stop using its mounted
+    /// borrow before the plugin releases the corresponding native instance.
     fn mount_native_view(&mut self, view: PluginNativeView) -> Result<(), PluginError>;
 
     /// Read transient plain text from the system clipboard on explicit demand.
@@ -34,6 +39,8 @@ pub trait OmniBarHostContext {
     ///
     /// Return a stable error for unavailable native clipboard access; no text is
     /// returned when the clipboard has no compatible plain-text representation.
+    /// `Some` transfers one owned text value to the caller, while `None` is a
+    /// successful absence and must not be presented as an access failure.
     fn read_clipboard_text(&mut self) -> Result<Option<String>, PluginError>;
 
     /// Write the supplied text without creating SDK clipboard history or caches.
@@ -47,5 +54,7 @@ pub trait OmniBarHostContext {
     ///
     /// The returned `Rc` shares the callback owner, not a hidden surface/session.
     /// Owners must prevent callback cycles and release their references on close.
+    /// A callback must return before its caller drops a session still borrowed
+    /// by that stack; observing a close request is not a deallocation receipt.
     fn foreground_lifecycle(&self) -> Rc<dyn PluginHostLifecycle>;
 }

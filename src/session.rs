@@ -191,8 +191,15 @@ impl PluginNativeView {
 /// OS window lease cannot retain that payload or become a hidden resident session.
 /// Native destruction and Host borrowing still require integration validation;
 /// implementing this trait does not enforce a lifecycle automatically.
+/// The Host keeps the returned session until close completion has returned from
+/// every outstanding callback; a failed preflight cannot be repaired by dropping
+/// the only owner of unsaved resources.
 pub trait PluginSession {
     /// Return the current borrowed native view, or `None` for a viewless session.
+    ///
+    /// A returned handle borrows this session's live instance and does not retain
+    /// it. Callers must retire copied handles at teardown rather than treating a
+    /// previously non-null pointer as evidence that the view is still alive.
     fn native_view(&self) -> Option<PluginNativeView> {
         // Viewless sessions remain valid without manufacturing an unusable native pointer.
         None
@@ -228,7 +235,7 @@ pub trait PluginSession {
         // An unsupported session refuses both scopes explicitly; it never invents release authority.
         Err(PluginError::new(
             "close_unsupported",
-            "插件 session 不支持关闭请求",
+            "插件会话不支持关闭请求",
         ))
     }
 }
@@ -238,6 +245,8 @@ pub enum PluginActivation {
     /// Work completed inline without transferring foreground resource ownership.
     Completed,
     /// Transfer the active session to the host until its teardown barrier completes.
+    /// The Box transfers Rust ownership, while mounting its view remains an
+    /// explicitly borrowed native relationship governed by the same close request.
     Session(Box<dyn PluginSession>),
 }
 

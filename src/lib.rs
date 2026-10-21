@@ -10,6 +10,11 @@
 //! Private modules separate contract responsibilities; root re-exports expose
 //! one protocol-3 API. Close scope states the required project-resource release
 //! boundary without creating a second lifecycle implementation inside the SDK.
+//!
+//! Protocol values carry metadata; registration owns synchronous dispatch; host
+//! capabilities expose explicit external operations; sessions describe the one
+//! foreground owner. Resource receipts remain the responsibility of the real
+//! Host and native plugin implementations rather than portable SDK models.
 
 #![deny(rustdoc::broken_intra_doc_links)]
 
